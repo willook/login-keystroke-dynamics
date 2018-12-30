@@ -6,11 +6,11 @@ from time import time
 from os import remove
 
 class KeyStroke():
-    file_path = None
-    tag_name = 'tag.txt'
-    n_patterns = 10
-    n_pattern = None
-    n_current = None
+    #file_path = None
+    #tag_name = 'tag.txt'
+    #n_patterns = 10
+    #n_pattern = None
+    #n_current = None
     
     def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 10, n_pattern = None, n_current = None):
         self.file_path = file_path
@@ -24,10 +24,11 @@ class KeyStroke():
         names = []
         times = []
         #times2 = []
-        
+
+        if records[0].name == 'enter' and records[0].event_type == 'up':
+            records = records[1:]
         
         t0 = records[0].time
-
         #마지막 인자는 엔터이므로 체크하지 않음
         for i in range(len(records)-1):
             if records[i].event_type == 'down':
@@ -67,14 +68,55 @@ class KeyStroke():
         
 
         self.n_current = len(patterns)
-        x_times = np.zeros((self.n_patterns, self.n_pattern))
+        x_times = np.zeros((self.n_current, self.n_pattern))
         
         for i in range(len(patterns)):
             x_time = np.load(patterns[i])
             x_times[i] = x_time
         return x_times
 
+    def _preprocess(self,x):
+        if len(x.shape) == 1:
+            x_copy = np.zeros(len(x)-1)
+            for i in range(len(x)-1,0,-1):
+                x_copy[i-1] = x[i] - x[i-1]
+                x_copy[i-1] = np.log(x[i-1]+1)
+            
+        if len(x.shape) == 2:
+            x_copy = np.zeros((x.shape[0],x.shape[1]-1))
+            for i in range(len(x)):
+                for j in range(len(x[i])-1,0,-1):
+                    x_copy[i][j-1] = x[i][j] - x[i][j-1]
+                    x_copy[i][j-1] = np.log(x_copy[i][j-1]+1)
+                
+        return x_copy
+
+    def _weights(self,X):
+        X_T = np.transpose(X)
+        weights = np.ones(len(X_T))
+        for i in range(len(X_T)):
+            weights[i] = 1/(np.var(X_T[i])**0.5)
+        w_sum = np.sum(weights)
+        for i in range(len(X_T)):
+            weights[i] = weights[i]/w_sum
+        return weights
+        
     def _recognition(self, X, y):
+        #print(X*10)
+        #print(y*10)
+        #print()
+        
+        Xp = self._preprocess(X)
+        yp = self._preprocess(y)
+        weights = self._weights(Xp)
+
+
+        
+        print(weights)
+        print(Xp*10)
+        #print(yp*10)
+        
+ 
         return True
     
     def _update(self, times):
@@ -96,9 +138,11 @@ class KeyStroke():
         while True:
             records = recording(until='enter')
             y_time, y_name = self._record_to_time(records)
-
+            y_time = np.array(y_time)
+            
             #입력이 태그와 같은지 확인
             if self._typing_check(y_name):
+                
                 break
             else:
                 print("[!] 입력이 일치하지 않습니다")
@@ -117,6 +161,7 @@ class KeyStroke():
         
 
 if __name__ == '__main__':
-    
+    #a = np.load("./test/1546162909.npy")
+    #print(a)
     k1 = KeyStroke('./test/')
     k1.login()
