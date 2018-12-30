@@ -4,25 +4,27 @@ from glob import glob
 from keyboard import record as recording
 from time import time
 from os import remove
-#jj
 
 class KeyStroke():
     file_path = None
     tag_name = 'tag.txt'
     n_patterns = 10
-    n_pattern = 0
-    n_current = 0
+    n_pattern = None
+    n_current = None
     
-    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 10, n_pattern = 0, n_current = 0):
+    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 10, n_pattern = None, n_current = None):
         self.file_path = file_path
         self.n_patterns = n_patterns
         self.n_current = n_current
         self.n_pattern = n_pattern    
         self.tag_name = tag_name
+        self.debug = True
         
     def _record_to_time(self, records):
         names = []
         times = []
+        #times2 = []
+        
         
         t0 = records[0].time
 
@@ -49,6 +51,9 @@ class KeyStroke():
                 else:
                     times.append(records[i].time-t0)
                     names.append(records[i].name)
+
+        
+        
         name = ''.join(names)
         return times, name
     
@@ -60,30 +65,37 @@ class KeyStroke():
     def _load_data(self):
         patterns = glob(self.file_path+'*.npy')
         
+
         self.n_current = len(patterns)
         x_times = np.zeros((self.n_patterns, self.n_pattern))
         
         for i in range(len(patterns)):
-            x_time = np.load(self.file_path + patterns[i])
+            x_time = np.load(patterns[i])
             x_times[i] = x_time
         return x_times
 
     def _recognition(self, X, y):
-
-
-        pass
-
+        return True
     
+    def _update(self, times):
+        file_name = str(int(time()))
+        np.save(self.file_path+file_name,times)
+        if self.debug:
+            print('[debug] pattern save as',self.file_path+file_name)
 
-    def _update(self, time):
+        if self.n_patterns == self.n_current:
+            patterns = glob(self.file_path+'*.npy')
+            patterns.sort()
+            if self.debug:
+                print('[debug] remove ',patterns[0])    
+            remove(patterns[0])
+            
         
-        pass
-    
     def login(self):
 
         while True:
             records = recording(until='enter')
-            y_time, y_name = _record_to_time(records)
+            y_time, y_name = self._record_to_time(records)
 
             #입력이 태그와 같은지 확인
             if self._typing_check(y_name):
@@ -93,18 +105,18 @@ class KeyStroke():
         
         #참조 패턴을 불러옴
         self.n_pattern = len(y_time)
-        x_times = _load_data()
-        '''
-        det = _recognition(x_times, y_time)
+        x_times = self._load_data()
+        
+        det = self._recognition(x_times, y_time)
         if det:
             print("login 성공")
             self._update(y_time)
 
-        else det:
+        else:
             print("login 실패")
-        '''
+        
 
 if __name__ == '__main__':
     
-    k1 = KeyStroke('./patterns/')
+    k1 = KeyStroke('./test/')
     k1.login()
