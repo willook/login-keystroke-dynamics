@@ -2,6 +2,7 @@ import numpy as np
 from keyboard import record
 
 #if shift is pressed no reason
+#iamgod
 
 if __name__ == '__main__':
     names = ['./']
