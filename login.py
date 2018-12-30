@@ -57,7 +57,27 @@ class KeyStroke():
         
         name = ''.join(names)
         return times, name
-    
+    '''
+    def _record_to_time_another(self, records):
+        times_2 = []
+
+        for i in range(len(records) - 1):
+            for j in range(i + 1, len(records) - 1):
+
+                if records[i].event_type == 'down':
+                    if records[i].name == '':
+                        if records[j].event_type == 'up':
+                            if records[j].name == '':
+                                times_2.append(records[j].time - records[i].time)
+                                break
+
+                    else:
+                        if records[j].event_type == 'up':
+                            times_2.append(records[j].time - records[i].time)
+                            break
+
+        return times_2
+    '''
     def _typing_check(self, name):
         f = open(self.file_path+self.tag_name)
         line = f.readline()
@@ -121,6 +141,13 @@ class KeyStroke():
     
     def _update(self, times):
         file_name = str(int(time()))
+        
+        # f = open(self.file_path + file_name + '.csv', 'w', encoding='utf-8', newline='')
+        # wr = csv.writer(f)
+        # wr.writerow(times)
+        # wr.writerow(times_2)
+        # f.close(
+        
         np.save(self.file_path+file_name,times)
         if self.debug:
             print('[debug] pattern save as',self.file_path+file_name)
