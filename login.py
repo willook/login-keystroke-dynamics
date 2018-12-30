@@ -4,6 +4,7 @@ from glob import glob
 from keyboard import record as recording
 from time import time
 from os import remove
+#jj
 
 class KeyStroke():
     file_path = None
