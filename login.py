@@ -15,15 +15,14 @@ class KeyStroke():
     #n_pattern = None
     #n_current = None
     
-    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 20, n_pattern = None, n_current = None, debug = False):
+    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 20, debug = False):
         self.file_path = file_path
         self.n_patterns = n_patterns
-        self.n_current = n_current
-        self.n_pattern = n_pattern
+        self.n_current = None
+        self.n_pattern = None
         self.n_valid = int(n_patterns * 0.3)
         self.tag_name = tag_name
         self.threshold = 1.4
-        
         self.debug = debug
 
         
@@ -257,6 +256,3 @@ if __name__ == '__main__':
         k1 = KeyStroke('./number/',debug = True)
         k1.login()
         sys.stdout.flush()
-        
-        
-        
