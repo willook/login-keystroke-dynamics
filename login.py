@@ -4,6 +4,7 @@ from glob import glob
 from keyboard import record as recording
 from time import time
 from os import remove
+import csv
 
 class KeyStroke():
     #file_path = None
@@ -23,7 +24,6 @@ class KeyStroke():
     def _record_to_time(self, records):
         names = []
         times = []
-        #times2 = []
 
         if records[0].name == 'enter' and records[0].event_type == 'up':
             records = records[1:]
@@ -57,7 +57,7 @@ class KeyStroke():
         
         name = ''.join(names)
         return times, name
-    '''
+    
     def _record_to_time_another(self, records):
         times_2 = []
 
@@ -77,14 +77,14 @@ class KeyStroke():
                             break
 
         return times_2
-    '''
+    
     def _typing_check(self, name):
         f = open(self.file_path+self.tag_name)
         line = f.readline()
         return line == name
 
     def _load_data(self):
-        patterns = glob(self.file_path+'*.npy')
+        patterns = glob(self.file_path+'*.csv')
         
 
         self.n_current = len(patterns)
@@ -139,21 +139,21 @@ class KeyStroke():
  
         return True
     
-    def _update(self, times):
+    def _update(self, times, times2):
         file_name = str(int(time()))
         
-        # f = open(self.file_path + file_name + '.csv', 'w', encoding='utf-8', newline='')
-        # wr = csv.writer(f)
-        # wr.writerow(times)
-        # wr.writerow(times_2)
-        # f.close(
+        f = open(self.file_path + file_name + '.csv', 'w', encoding='utf-8', newline='')
+        wr = csv.writer(f)
+        wr.writerow(times)
+        wr.writerow(times2)
+        f.close()
         
-        np.save(self.file_path+file_name,times)
+        #np.save(self.file_path+file_name,times)
         if self.debug:
             print('[debug] pattern save as',self.file_path+file_name)
 
         if self.n_patterns == self.n_current:
-            patterns = glob(self.file_path+'*.npy')
+            patterns = glob(self.file_path+'*.csv')
             patterns.sort()
             if self.debug:
                 print('[debug] remove ',patterns[0])    
@@ -163,13 +163,15 @@ class KeyStroke():
     def login(self):
 
         while True:
+            print("[id] : ",end="")
             records = recording(until='enter')
             y_time, y_name = self._record_to_time(records)
+            y_time2 = self._record_to_time_another(records)
+            
             y_time = np.array(y_time)
             
             #입력이 태그와 같은지 확인
             if self._typing_check(y_name):
-                
                 break
             else:
                 print("[!] 입력이 일치하지 않습니다")
@@ -181,14 +183,15 @@ class KeyStroke():
         det = self._recognition(x_times, y_time)
         if det:
             print("login 성공")
-            self._update(y_time)
+            self._update(y_time, y_time2)
 
         else:
             print("login 실패")
         
 
 if __name__ == '__main__':
-    #a = np.load("./test/1546162909.npy")
-    #print(a)
+    
+    #while True:
     k1 = KeyStroke('./test/')
     k1.login()
+        
