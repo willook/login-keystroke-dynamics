@@ -136,34 +136,24 @@ class KeyStroke():
             weights[i] = weights[i]/w_sum
         return weights
         
-    def _recognition(self, X, y):
-        #print(X*10)
-        #print(y*10)
-        #print()
-        
-        Xp = self._preprocess(X)
-        yp = self._preprocess(y)
-        weights = self._weights(Xp)
-
-        if self.debug:
-            print('[weight]')
-            print((weights*100).astype(np.int32))
-            #print('[X times processed]')
-            #print((Xp*1000).astype(np.int32))
-            #print('[y time processed]')
-            #print((yp*1000).astype(np.int32))
-
-        score = 0
+    def _recognition(self, Xp, yp):
 
         if self.n_current < self.n_patterns * 0.5:
             print("data가 충분치 않습니다")
             return True
-
+        
+        score = 0
+        weights = self._weights(Xp)
+        
+        if self.debug:
+            print('[weight]')
+            print((weights*100).astype(np.int32))
+            
         for i in range(self.n_current - self.n_valid, self.n_current):
 
-            min_score = self._get_diff(Xp[:-self.n_valid],Xp[i],weights)
+            med_score = self._get_diff(Xp[:-self.n_valid],Xp[i],weights)
             
-            score += min_score / self.n_valid
+            score += med_score / self.n_valid
             
         input_score = self._get_diff(Xp[:-self.n_valid],yp,weights)
         if self.debug:
@@ -236,13 +226,18 @@ class KeyStroke():
         
         #참조 패턴을 불러옴
         self.n_pattern = len(y_time)
-        x_times, _ = self._load_data()
+        x_times, x_times2 = self._load_data()
         #if self.debug:
             #print("[x times]")
             #print((1000*x_times).astype(np.int32))
+
+
+        Xp = self._preprocess(x_times)
+        yp = self._preprocess(y_time)
+        det = self._recognition(Xp, yp)
+        det2 = self._recognition(x_times2, y_time2)
         
-        det = self._recognition(x_times, y_time)
-        if det:
+        if det and det2:
             print("login 성공")
             self._update(y_time, y_time2)
 
