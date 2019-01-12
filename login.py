@@ -15,14 +15,14 @@ class KeyStroke():
     #n_pattern = None
     #n_current = None
     
-    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 20, debug = False, update = True):
+    def __init__(self,file_path,threshold = 1.50, tag_name = 'tag.txt', n_patterns = 20, debug = False, update = True):
         self.file_path = file_path
         self.n_patterns = n_patterns
         self.n_current = None
         self.n_pattern = None
         self.n_valid = None
         self.tag_name = tag_name
-        self.threshold = 1.25
+        self.threshold = threshold
         self.debug = debug
         self.update = update
 
@@ -146,7 +146,18 @@ class KeyStroke():
         return weights
 
     def _weights2(self,X):
-        return np.ones(X[0].shape)/len(X[0])
+        weights = np.ones(X[0].shape)/len(X[0])*100
+        
+        kg = key_gragh()
+        f = open(self.file_path+self.tag_name)
+        line = f.readline()
+        line = line.replace("\n","")
+        f.close()
+        for i in range(len(line)-1):
+            if kg.is_chain(line[i],line[i+1]):
+                weights[i] = 0
+    
+        return weights
 
     
         
@@ -161,15 +172,10 @@ class KeyStroke():
         weights = self._weights(Xp)
         #weights = np.ones(yp.shape)/len(yp)
 
-        
-                
-        
         if self.debug:
             print('[weight]')
             print((weights*100).astype(np.int32))
 
-    
-        
         for i in range(self.n_current - self.n_valid, self.n_current):
             med_score = self._get_diff(Xp[:-self.n_valid],Xp[i],weights)
             
@@ -194,7 +200,7 @@ class KeyStroke():
         for i in range(len(X)):
             diff = np.abs(X[i]-y)
             cand_score.append(np.dot(diff,w))
-        return np.median(cand_score)
+        return np.min(cand_score)
         
     
     def _update(self, times):
@@ -276,17 +282,19 @@ class KeyStroke():
         
         
         if det:
-            print("login 성공")
+            if self.debug:
+                print("login 성공")
             if self.update:
                 self._update(y)
             return True
 
         else:
-            print("login 실패")
+            if self.debug:
+                print("login 실패")
             return False
 
-def validation(train_path, test_paths,debug = True):
-    k1 = KeyStroke(train_path,debug = True,n_patterns = 30,update = False)
+def validation(train_path, test_paths,debug = True, threshold=1.5):
+    k1 = KeyStroke(train_path,threshold=threshold,debug = False,n_patterns = 20,update = False)
 
 
     score = 0
@@ -300,7 +308,6 @@ def validation(train_path, test_paths,debug = True):
     
     
     test_paths = glob(test_paths+"**/")
-    print("test_paths[2]: ",len(test_paths))
     for test_path in test_paths:
         f = open(test_path + "answer.txt", 'r')
         label = bool(f.readline().replace('\n',''))
@@ -309,7 +316,6 @@ def validation(train_path, test_paths,debug = True):
         
         csv_paths = glob(test_path+"*.csv")
         
-        print("csv_path[s2x]: ",len(csv_paths))
         for csv_path in csv_paths:
            
             y = []
@@ -341,10 +347,19 @@ def validation(train_path, test_paths,debug = True):
 if __name__ == '__main__':
     train = "./train/"
     test = "./test/"
-    ret,ret1,ret2 = validation(train, test, debug = True)
+
+    ret,ret1,ret2 = validation(train, test,threshold=1.0, debug = False)
     print("성공률:",ret)
-    print("jh 성공률:",ret1)
-    print("yt 성공률:",ret2)
+
+    min_thres = 1.40
+    max_thres = 1.80
+    n=40
+    for i in range(n):
+        threshold = min_thres + (max_thres-min_thres)*i/n
+        ret,ret1,ret2 = validation(train, test,threshold=threshold, debug = False)
+        print("성공률:",ret,threshold)
+    #print("jh 성공률:",ret1)
+    #print("yt 성공률:",ret2)
     
     '''
     k1 = KeyStroke('./test/yt/',debug = True,n_patterns = 40,update = True)
