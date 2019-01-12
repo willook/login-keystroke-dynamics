@@ -1,5 +1,4 @@
 import numpy as np
-from rss import rss
 from glob import glob
 from keyboard import record as recording
 from time import time
@@ -7,6 +6,7 @@ from os import remove
 from os import system
 import sys
 import csv
+from key_graph import key_gragh
 
 class KeyStroke():
     #file_path = None
@@ -15,15 +15,16 @@ class KeyStroke():
     #n_pattern = None
     #n_current = None
     
-    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 20, debug = False):
+    def __init__(self,file_path, tag_name = 'tag.txt', n_patterns = 20, debug = False, update = True):
         self.file_path = file_path
         self.n_patterns = n_patterns
         self.n_current = None
         self.n_pattern = None
-        self.n_valid = int(n_patterns * 0.3)
+        self.n_valid = None
         self.tag_name = tag_name
-        self.threshold = 1.4
+        self.threshold = 1.25
         self.debug = debug
+        self.update = update
 
         
     def _record_to_time(self, records):
@@ -86,29 +87,25 @@ class KeyStroke():
     def _typing_check(self, name):
         f = open(self.file_path+self.tag_name)
         line = f.readline()
+        line = line.replace("\n","")
         return line == name
 
     def _load_data(self):
         
         patterns = glob(self.file_path+'*.csv')
         self.n_current = len(patterns)
-        x_times1 = np.zeros((self.n_current, self.n_pattern))
-        x_times2 = np.zeros((self.n_current, self.n_pattern))
+        self.n_valid = int(self.n_current * 0.3)
+        X = np.zeros((self.n_current, self.n_pattern))
         
         for i in range(len(patterns)):
-            x_time1 = []
-            x_time2 = []
+            x = []
             
             with open(patterns[i], newline='') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    x_time1.append(row['time1'])
-                    x_time2.append(row['time2'])
-            x_times1[i] = x_time1
-            x_times2[i] = x_time2
-            
-        
-        return x_times1,x_times2
+                    x.append(row['times'])    
+            X[i] = x
+        return X
 
     def _preprocess(self,x):
         if len(x.shape) == 1:
@@ -130,31 +127,55 @@ class KeyStroke():
         X_T = np.transpose(X)
         weights = np.ones(len(X_T))
         for i in range(len(X_T)):
-            weights[i] = 1/(np.var(X_T[i][:-self.n_valid])**0.5)
+            weights[i] = 1/(np.var(X_T[i][:-self.n_valid])**0.5)*np.abs(np.mean(X_T[i]))
+            #weights[i] = 1/(np.var(X_T[i][:-self.n_valid])**0.5)
+        
+        kg = key_gragh()
+        f = open(self.file_path+self.tag_name)
+        line = f.readline()
+        line = line.replace("\n","")
+        f.close()
+        for i in range(len(line)-1):
+            if kg.is_chain(line[i],line[i+1]):
+                weights[i] = 0
+        
+
         w_sum = np.sum(weights)
         for i in range(len(X_T)):
             weights[i] = weights[i]/w_sum
         return weights
+
+    def _weights2(self,X):
+        return np.ones(X[0].shape)/len(X[0])
+
+    
         
     def _recognition(self, Xp, yp):
 
+        yp = yp.astype(Xp.dtype)
         if self.n_current < self.n_patterns * 0.5:
             print("data가 충분치 않습니다")
             return True
         
         score = 0
         weights = self._weights(Xp)
+        #weights = np.ones(yp.shape)/len(yp)
+
+        
+                
         
         if self.debug:
             print('[weight]')
             print((weights*100).astype(np.int32))
-            
-        for i in range(self.n_current - self.n_valid, self.n_current):
 
+    
+        
+        for i in range(self.n_current - self.n_valid, self.n_current):
             med_score = self._get_diff(Xp[:-self.n_valid],Xp[i],weights)
             
             score += med_score / self.n_valid
-            
+
+     
         input_score = self._get_diff(Xp[:-self.n_valid],yp,weights)
         if self.debug:
             print("[input_score] :",input_score)
@@ -167,27 +188,28 @@ class KeyStroke():
 
     def _get_diff(self,X,y,w):
         cand_score = []
-
+        #print(X.shape)
+        #print(type(y))
+        #print(int(y[0]*1000),int(y[-1]*1000))
         for i in range(len(X)):
-            cand_score.append(np.dot(np.abs(X[i]-y),w))
-            
+            diff = np.abs(X[i]-y)
+            cand_score.append(np.dot(diff,w))
         return np.median(cand_score)
         
     
-    def _update(self, times1, times2):
+    def _update(self, times):
 
 
         file_name = str(int(time()))
         with open(self.file_path + file_name + '.csv', 'w', newline='') as csvfile:
-            fieldnames = ['time1', 'time2']
+            fieldnames = ['times']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
             writer.writeheader()
-            for i in range(len(times1)):
+            for i in range(len(times)):
                 
                 
-                writer.writerow({'time1': times1[i],
-                                 'time2': times2[i]})
+                writer.writerow({'times': times[i]})
         '''
         f = open(self.file_path + file_name + '.csv', 'w', encoding='utf-8', newline='')
         wr = csv.writer(f)
@@ -205,49 +227,128 @@ class KeyStroke():
             if self.debug:
                 print('[debug] remove ',patterns[0])    
             remove(patterns[0])
-            
-        
-    def login(self):
 
-        while True:
-            
-            records = recording(until='enter')
-            sys.stdout.flush()
-            y_time, y_name = self._record_to_time(records)
-            y_time2 = self._record_to_time_another(records)
-            
-            y_time = np.array(y_time)
-            
-            #입력이 태그와 같은지 확인
-            if self._typing_check(y_name):
-                break
-            else:
-                print("[!] 입력이 일치하지 않습니다")
+    def _totalTime(self,x):
+        x = x.T
+        return (x[-1] - x[0]).T
+
+    def login(self, y = None):
         
+        if y == None:
+            while True:
+                print("[id]: ")
+                records = recording(until='enter')
+                sys.stdout.flush()
+                y_time, y_name = self._record_to_time(records)
+                y_time2 = self._record_to_time_another(records)
+                
+                y_time = np.array(y_time)
+                y_time2 = np.array(y_time2)
+                
+                #입력이 태그와 같은지 확인
+                if self._typing_check(y_name):
+                    break
+                else:
+                    print("[!] 입력이 일치하지 않습니다")
+            yp = self._preprocess(y_time)
+            yp2 = y_time2
+            yp3 = self._totalTime(y_time)
+            y = np.append(yp,yp2,axis=0)
+            y = np.hstack([y,yp3])
+        else:
+            y = np.array(y)
+                
         #참조 패턴을 불러옴
-        self.n_pattern = len(y_time)
-        x_times, x_times2 = self._load_data()
+        self.n_pattern = len(y)
+        X = self._load_data()
+
         #if self.debug:
             #print("[x times]")
             #print((1000*x_times).astype(np.int32))
 
 
-        Xp = self._preprocess(x_times)
-        yp = self._preprocess(y_time)
-        det = self._recognition(Xp, yp)
-        det2 = self._recognition(x_times2, y_time2)
         
-        if det and det2:
+        
+ 
+        #from time import sleep
+        #sleep(100)
+        det = self._recognition(X, y)
+        
+        
+        if det:
             print("login 성공")
-            self._update(y_time, y_time2)
+            if self.update:
+                self._update(y)
+            return True
 
         else:
             print("login 실패")
+            return False
+
+def validation(train_path, test_paths,debug = True):
+    k1 = KeyStroke(train_path,debug = True,n_patterns = 30,update = False)
+
+
+    score = 0
+    total = 0
+    
+    score1 = 0
+    total1 = 0
+    
+    score2 = 0
+    total2 = 0
+    
+    
+    test_paths = glob(test_paths+"**/")
+    print("test_paths[2]: ",len(test_paths))
+    for test_path in test_paths:
+        f = open(test_path + "answer.txt", 'r')
+        label = bool(f.readline().replace('\n',''))
+    
+        f.close()
         
+        csv_paths = glob(test_path+"*.csv")
+        
+        print("csv_path[s2x]: ",len(csv_paths))
+        for csv_path in csv_paths:
+           
+            y = []
+            with open(csv_path, newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    y.append(row['times'])   
+
+            xlabel = k1.login(y)
+            if label:
+                if xlabel:
+                    score+=1
+                    score1+=1
+                total1+=1
+            else:
+                if xlabel:
+                    score2+=1
+                else:
+                    score+=1
+                total2+=1  
+            total += 1
+            if debug:
+                print("ans:",label, "guess:",xlabel)
+                print(score, total)
+                print()
+    return score/total,score1/total1,score2/total2
+
 
 if __name__ == '__main__':
+    train = "./train/"
+    test = "./test/"
+    ret,ret1,ret2 = validation(train, test, debug = True)
+    print("성공률:",ret)
+    print("jh 성공률:",ret1)
+    print("yt 성공률:",ret2)
     
+    '''
+    k1 = KeyStroke('./test/yt/',debug = True,n_patterns = 40,update = True)
     while True:
-        k1 = KeyStroke('./number/',debug = True)
         k1.login()
         sys.stdout.flush()
+    '''
