@@ -21,16 +21,17 @@ class KeyStroke():
     #n_pattern = None
     #n_current = None
     
-    def __init__(self,file_path,threshold = 1.50, tag_name = 'tag.txt', n_patterns = 20, debug = False, update = True):
+    def __init__(self,file_path,threshold = 1.50, GMM = False , n_patterns = 20, debug = False, update = True):
         self.file_path = file_path
         self.n_patterns = n_patterns
         self.n_current = None
         self.n_pattern = None
         self.n_valid = None
-        self.tag_name = tag_name
+        self.tag_name = 'tag.txt'
         self.threshold = threshold
         self.debug = debug
         self.update = update
+        self.GMM = GMM
 
         
     def _record_to_time(self, records):
@@ -41,11 +42,16 @@ class KeyStroke():
             records = records[1:]
         
         t0 = records[0].time
+
+        self._delete = []
         #마지막 인자는 엔터이므로 체크하지 않음
-        for i in range(len(records)-1):
+        for i in range(len(records)):
             if records[i].event_type == 'down':
                 if records[i].name == 'space':
                     records[i].name = ' '
+                if records[i].name == 'enter':
+                    records[i].name = ''
+                
                 if records[i].name == 'shift':
                     if i != 0 and records[i-1].name == 'shift':
                         times = times[:-1]
@@ -53,29 +59,37 @@ class KeyStroke():
                     else:
                         records[i].name = ''
                 
-                if records[i].name == 'backspace':
+                if records[i].name == 'backspace' or records[i].name == 'delete':
                     times = times[:-1]
                     names = names[:-1]
-                    
-                if records[i].name == 'delete':
-                    times = times[:-1]
-                    names = names[:-1]
-                    
+                    if i == 0:
+                        self._delete = np.append(self._delete, i)
+                    else:
+                        self._delete = np.append(self._delete,i-2)
+                        self._delete = np.append(self._delete,i-1)
+                        self._delete = np.append(self._delete,i)
+                        
+                          
                 else:
                     times.append(records[i].time-t0)
                     names.append(records[i].name)
 
-        
-        
         name = ''.join(names)
-        return times, name
+        
+        return np.array(times), name
     
     def _record_to_time_another(self, records):
+        #records = np.delete(records,self._delete,0)
         times_2 = []
 
-        for i in range(len(records) - 1):
+        for i in range(len(records)-1):
             for j in range(i + 1, len(records) - 1):
+                if records[i].event_type == 'down':
+                    if records[i].name == 'backspace' or records[i].name == 'delete':
+                        times_2 = times_2[:-1]            
+                        break
 
+                    
                 if records[i].event_type == 'down':
                     if records[i].name == '':
                         if records[j].event_type == 'up':
@@ -88,12 +102,20 @@ class KeyStroke():
                             times_2.append(records[j].time - records[i].time)
                             break
 
-        return times_2
+        return np.array(times_2)
     
-    def _typing_check(self, name):
+    def _typing_check(self, name, pw = False):
         f = open(self.file_path+self.tag_name)
-        line = f.readline()
+        if pw:
+            f.readline()
+        line = f.readline()     
         line = line.replace("\n","")
+        if not pw:
+            print("id: ",name)
+        if pw:
+            print("pw: ",name)
+        
+        f.close()
         return line == name
 
     def _load_data(self):
@@ -197,9 +219,38 @@ class KeyStroke():
     
         return weights
 
-    
-        
+
     def _recognition(self, Xp, yp):
+
+        yp = yp.astype(Xp.dtype)
+        if self.n_current < self.n_patterns * 0.5:
+            print("data가 충분치 않습니다")
+            return True
+        
+        score = 0
+        weights = self._weights(Xp)
+        #weights = np.ones(yp.shape)/len(yp)
+
+        if self.debug:
+            print('[weight]')
+            print((weights*100).astype(np.int32))
+
+        for i in range(self.n_current - self.n_valid, self.n_current):
+            med_score = self._get_diff(Xp[:-self.n_valid],Xp[i],weights)
+            
+            score += med_score / self.n_valid
+
+     
+        input_score = self._get_diff(Xp[:-self.n_valid],yp,weights)
+        if self.debug:
+            print("[input_score] :",input_score)
+            print("[threshold] :",score * self.threshold)
+        if input_score <= score * self.threshold:
+            return True
+        
+        return False    
+
+    def _recognition_GMM(self, Xp, yp):
 
         yp = yp.astype(Xp.dtype)
         if self.n_current < self.n_patterns * 0.5:
@@ -220,18 +271,17 @@ class KeyStroke():
                 
         Xp = np.delete(Xp,deleted,1)
         yp = np.delete(yp,deleted,0)
-        print(deleted)
         
         #weights = self._weights(Xp)
         #self.gmm = mixture.GaussianMixture(n_components=1, covariance_type='spherical').fit(Xp)
-        self.gmm = mixture.BayesianGaussianMixture(n_components=1, covariance_type='full').fit(Xp)
+        self.gmm = mixture.BayesianGaussianMixture(n_components=3, covariance_type='full').fit(Xp)
         #self.plot_results(Xp, self.gmm.predict(Xp), self.gmm.means_, self.gmm.covariances_, 0,'Gaussian Mixture')
         yp_T = np.reshape(yp,(1,len(yp)))
         
         input_score = self.gmm.score(yp_T)
-        print("end")
-        print(input_score)
-        self.threshold = -33.5  #bayesian n_component = 1, yp1 
+        if self.debug:
+            print(input_score)
+        #self.threshold = -33.5  #bayesian n_component = 1, yp1 
         
         if self.debug:
             print("[input_score] :",input_score)
@@ -285,36 +335,47 @@ class KeyStroke():
             remove(patterns[0])
 
     def _totalTime(self,x):
-        x = x.T
-        return (x[-1] - x[0]).T
+        #x = x.T
+        return x[-1] - x[0]
 
     def login(self, y = None):
         
         if y == None:
             while True:
                 print("[id]: ")
-                records = recording(until='enter')
-                sys.stdout.flush()
-                y_time, y_name = self._record_to_time(records)
-                y_time2 = self._record_to_time_another(records)
+                id_records = recording(until='enter')
+                from time import sleep
+                sleep(0.5)
+
+                print("[pw]: ")
+                pw_records = recording(until='enter')
+                sleep(0.5)
+                #sys.stdout.flush()
+                id_y_time, id_y_name = self._record_to_time(id_records)
+                id_y_time2 = self._record_to_time_another(id_records)
+
+                pw_y_time, pw_y_name = self._record_to_time(pw_records)
+            
+                pw_y_time2 = self._record_to_time_another(pw_records)
                 
-                y_time = np.array(y_time)
-                y_time2 = np.array(y_time2)
-                
+                #print(y_name)
                 #입력이 태그와 같은지 확인
-                if self._typing_check(y_name):
+                if self._typing_check(id_y_name) and self._typing_check(pw_y_name, pw=True):
                     break
                 else:
-                    print("[!] 입력이 일치하지 않습니다")
+                    print("[!] id나 비밀번호가 일치하지 않습니다.")
             
-            yp = self._preprocess(y_time)
+            id_yp = self._preprocess(id_y_time)
+            pw_yp = self._preprocess(pw_y_time)
+            yp = np.append(id_yp, pw_yp,axis=0)
             
-            yp2 = y_time2
-            yp3 = self._totalTime(y_time)
+            yp2 = np.append(id_y_time2, pw_y_time2,axis=0)
+            id_yp3 = self._totalTime(id_y_time)
+            pw_yp3 = self._totalTime(pw_y_time)
+            
             y = np.append(yp,yp2,axis=0)
-            y = np.hstack([y,yp3])
-            
-            
+            y = np.hstack([y,id_yp3])
+            y = np.hstack([y,pw_yp3])
             
         else:
             y = np.array(y,dtype = np.float64)
@@ -322,39 +383,13 @@ class KeyStroke():
         #참조 패턴을 불러옴
         self.n_pattern = len(y)
         X = self._load_data()
-        '''
-        for i in range(len(X)):
-            for j in range(int(len(X[0])/2-1)):
-                X[i][j] = np.exp(X[i][j])
-        for j in range(int(len(y)/2-1)):
-            y[j] = np.exp(y[j])
-        
-           
-        #print(X[0])    
-        
-        #print(y)
-        y = np.log(y)
-        X = np.log(X)
-        
-        
-        for i in range(len(X)):
-            for j in range(int(len(X[0])/2-1),len(X[0])-1):
-                X[i][j] = np.log(X[i][j])
-        for j in range(int(len(y)/2-1),len(y)-1):
-            y[j] = np.log(y[j])
-        '''
-        #print(X[2])
-        #print(y)
-        
 
-        #if self.debug:
-            #print("[x times]")
-            #print((1000*x_times).astype(np.int32))
-
-        #from time import sleep
-        #sleep(100)
-        det = self._recognition(X, y)
-        
+        det = None
+        if self.GMM:
+            det = self._recognition_GMM(X, y)
+        else:
+            det = self._recognition(X, y)
+            
         
         if det:
             if self.debug:
@@ -368,8 +403,8 @@ class KeyStroke():
                 print("login 실패")
             return False
 
-def validation(train_path, test_paths,debug = True, threshold=1.5):
-    k1 = KeyStroke(train_path,threshold=threshold,debug = False,n_patterns = 20,update = False)
+def validation(train_path, test_paths,debug = True, threshold=1.5,GMM = False):
+    k1 = KeyStroke(train_path,threshold=threshold,debug = debug, n_patterns = 20,update = False,GMM=GMM)
 
 
     score = 0
@@ -420,28 +455,34 @@ def validation(train_path, test_paths,debug = True, threshold=1.5):
 
 
 if __name__ == '__main__':
-    train = "./train/"
-    test = "./test/"
 
-    ret,ret1,ret2 = validation(train, test,threshold=1.5, debug = True)
+    train = "./train3/"
+    test = "./test3/"
+    
+    #threshold of gmm -33.5 = 79%
+    #threshold of nomal 1.5 = 79%
+    '''
+    ret,ret1,ret2 = validation(train, test,threshold=1.5, debug = True, GMM=False)
     print("성공률:",ret)
     print("본인 성공률:",ret1)
     print("타인 성공률:",ret2)
-    
     '''
-    min_thres = 1.40
-    max_thres = 1.80
+    '''
+    #min_thres = 1.40
+    #max_thres = 1.80
+    min_thres = -8000
+    max_thres = -8000
     n=1
     for i in range(n):
         threshold = min_thres + (max_thres-min_thres)*i/n
-        ret,ret1,ret2 = validation(train, test,threshold=threshold, debug = False)
+        ret,ret1,ret2 = validation(train, test,threshold=threshold,GMM=True, debug = False)
         print("성공률:",ret,threshold)
-    #print("jh 성공률:",ret1)
-    #print("yt 성공률:",ret2)
+        print("jh 성공률:",ret1)
+        print("yt 성공률:",ret2)
     '''
-    '''
-    k1 = KeyStroke('./test/yt/',debug = True,n_patterns = 40,update = True)
+    #train = "./test2/yt/"
+    k1 = KeyStroke(train, debug = True,threshold = 1.5,n_patterns = 10,update = True,GMM=False)
     while True:
         k1.login()
         sys.stdout.flush()
-    '''
+    
