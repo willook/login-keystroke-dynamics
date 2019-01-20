@@ -2,8 +2,7 @@ import numpy as np
 from glob import glob
 from keyboard import record as recording
 from time import time
-from os import remove
-from os import system
+from os import remove, system
 import sys
 import csv
 from key_graph import key_gragh
@@ -33,7 +32,7 @@ class KeyStroke():
         self.update = update
         self.GMM = GMM
         self.Kmeans = Kmeans
-        
+        self._k = -1
 
         
     def _record_to_time(self, records):
@@ -239,9 +238,8 @@ class KeyStroke():
             print((weights*100).astype(np.int32))
 
         for i in range(self.n_current - self.n_valid, self.n_current):
-            med_score, selected = self._get_diff(Xp[:-self.n_valid],Xp[i],weights = weights)
-            #med_score, selected = self._get_diff(Xp[:5],Xp[i],weights = weights)
-            #print(selected)
+            med_score, _ = self._get_diff(Xp[:-self.n_valid],Xp[i],weights = weights)
+
             score += med_score / self.n_valid
 
      
@@ -441,9 +439,8 @@ class KeyStroke():
 
     
 
-def validation(train_path, test_paths,debug = True,Kmeans = True, threshold=1.5,GMM = False, n_patterns = 20):
-    k1 = KeyStroke(train_path,threshold=threshold,debug = debug, Kmeans = True, n_patterns = n_patterns,update = False,GMM=GMM)
-
+def validation(train_path, test_paths,debug = True,Kmeans = False, threshold=1.5,GMM = False, n_patterns = 20):
+    k1 = KeyStroke(train_path,threshold=threshold,debug = debug, Kmeans = Kmeans, n_patterns = n_patterns,update = False,GMM=GMM)
 
     score = 0
     total = 0
@@ -485,6 +482,7 @@ def validation(train_path, test_paths,debug = True,Kmeans = True, threshold=1.5,
                     score+=1
                 total2+=1  
             total += 1
+            
             if debug:
                 print("ans:",label, "guess:",xlabel)
                 print(score, total)
@@ -501,15 +499,15 @@ if __name__ == '__main__':
     
     #threshold of gmm -33.5 = 79%
     #threshold of nomal 1.5 = 79%
-    
+    '''
     ret,ret1,ret2 = validation(train, test,threshold=1.5,Kmeans = True, debug = True, GMM=False, n_patterns = 20)
     print("성공률:",ret)
     print("본인 성공률:",ret1)
     print("타인 성공률:",ret2)
     '''
     
-    min_thres = 3
-    max_thres = 6
+    min_thres = 1.4
+    max_thres = 1.6
     #min_thres = -1000
     #max_thres = -10000
     n=20
@@ -519,7 +517,7 @@ if __name__ == '__main__':
         print("성공률:",ret,threshold)
         print("jh 성공률:",ret1)
         print("yt 성공률:",ret2)
-    '''
+    
     '''
     #train = "./test2/yt/"
     #train = "./train/"      # n_patterns = 20, threshold = 1.5
