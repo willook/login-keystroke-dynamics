@@ -343,7 +343,7 @@ class KeyStroke():
         #x = x.T
         return x[-1] - x[0]
 
-    def _K_means(self, X, k = 5):
+    def _K_means(self, X, k = 4):
         if len(X) - self.n_valid < k:
             print("[warning] 데이터의 개수가 모자라서 k means를 실행할 수 없습니다.")
             return X
@@ -415,7 +415,7 @@ class KeyStroke():
 
         
         if self.Kmeans:
-            X = self._K_means(X , k = 5)  
+            X = self._K_means(X , k = 4)  
         
 
         if self.GMM:
